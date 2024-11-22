@@ -1,0 +1,11 @@
+node_modules/
+dist/
+
+.env
+
+hidden_exports/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
