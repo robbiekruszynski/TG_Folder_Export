@@ -11,7 +11,7 @@ dotenv.config();
 const API_ID = parseInt(process.env.API_ID || "0");
 const API_HASH = process.env.API_HASH || "";
 const SESSION_STRING = process.env.SESSION_STRING || "";
-const EXPORT_DIR = process.env.EXPORT_DIR || "./hidden_exports"; // Directory from .env or default to './exports'
+const EXPORT_DIR = process.env.EXPORT_DIR || "./hidden_exports";
 
 // Ensure the export directory exists
 if (!fs.existsSync(EXPORT_DIR)) {
