@@ -12,7 +12,6 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Ensure the summary directory exists
 if (!fs.existsSync(SUMMARY_DIR)) {
   fs.mkdirSync(SUMMARY_DIR, { recursive: true });
 }
@@ -28,7 +27,7 @@ async function summarizeFile(filePath: string, outputPath: string) {
         { role: "system", content: "You are an assistant that summarizes chat conversations." },
         { role: "user", content: `Summarize this chat log:\n\n${rawData}` },
       ],
-      max_tokens: 1000, // Adjust based on desired summary length
+      max_tokens: 1000, 
     });
 
     const summary = response.choices[0]?.message?.content || "No summary available.";
@@ -52,5 +51,3 @@ async function summarizeChats() {
 }
 
 summarizeChats();
-
-
