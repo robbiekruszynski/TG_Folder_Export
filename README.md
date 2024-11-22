@@ -27,7 +27,7 @@ Follow these steps to get everything up and running:
 1. Clone the Repository: Open your terminal and run:
 
 ```
-git clone https://github.com/robbiekruszynski/tg_folder_pull.git
+git clone https://github.com/robbiekruszynski/TG-FOLER-EXPORT.git
 ```
 
 
@@ -48,6 +48,7 @@ npm i dotenv
 Configure Environment Variables: We like to keep things tidy with a .env file. Create one in the project's root directory:
 ```touch .env```
 
+Go to https://my.telegram.org/ and log in to acquire 
 
 Inside .env, add:
 
@@ -77,5 +78,9 @@ Run the Export Script: You're all set! Execute:
 
 ```
 npx ts-node src/exportChats.ts
+```
+then for a summary of the conversations 
+```
+npx ts-node src/summarizeChats.ts
 ```
 Follow the on-screen instructions to select the folder and export your chats.
