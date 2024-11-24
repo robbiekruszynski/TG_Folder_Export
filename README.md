@@ -1,86 +1,92 @@
 # Telegram Folder Exporter
 
-This tool lets you export all your Telegram chats from a specific folder using TypeScript and GramJS, or at least that is what it's supposed to do. 
+A TypeScript-based tool using GramJS to export Telegram chats from a specific folder.
+
+---
 
 ## Features
 
-Selective Export: Choose a specific Telegram folder and export all its chats.
+- **Selective Export**: Export all chats from a specific Telegram folder.
+- **Structured Output**: Messages are saved in `.txt` files, with separate files for each conversation.
 
-Structured Output: Messages are saved in .txt files, and the conversations within the folder are separated.
+---
 
 ## Prerequisites
 
-Node.js: Our script runs on Node.js. 
+1. **Node.js**: Install Node.js if not already available on your system. [Download Node.js](https://nodejs.org/)
+2. **Telegram API Credentials**: Obtain your API ID and API Hash from Telegram:
+   - Visit [my.telegram.org](https://my.telegram.org).
+   - Log in with your Telegram account.
+   - Navigate to **API Development Tools**.
+   - Create a new application (name it anything you like).
+   - Save the **API ID** and **API Hash** securely.
 
-Telegram API Credentials: To chat with Telegram's servers, you'll need an API ID and API Hash.
-
-1. Visit my.telegram.org.
-2. Log in with your Telegram account.
-3. Navigate to "API Development Tools."
-4. Create a new application. Name it something fun!
-5. Voilà! You'll see your API ID and API Hash. Keep them secret, keep them safe.
+---
 
 ## Setup Guide
 
-Follow these steps to get everything up and running:
-
-1. Clone the Repository: Open your terminal and run:
-
+### 1. Clone the Repository
+Clone the repository to your local machine:
 ```
-git clone https://github.com/robbiekruszynski/TG-FOLER-EXPORT.git
-```
-
-
-```
+git clone https://github.com/robbiekruszynski/TG-FOLDER-EXPORT.git
 cd tg_folder_pull
 ```
 
-### Install Dependencies: Let's get those packages:
+2. Install Dependencies
+Install the required packages:
 
 ```
 npm install
 ```
-
 ```
 npm i dotenv
 ```
 
-Configure Environment Variables: We like to keep things tidy with a .env file. Create one in the project's root directory:
-```touch .env```
+3. Configure Environment Variables
+Create a .env file in the project's root directory:
 
-Go to https://my.telegram.org/ and log in to acquire 
-
-Inside .env, add:
+```
+touch .env
+```
+Add the following keys to your .env file:
 
 ```
 API_ID=your_api_id_here
 API_HASH=your_api_hash_here
 SESSION_STRING=your_session_string_here
+HUGGINGFACE_API_KEY=your_huggingface_api_key_here
+EXPORT_DIR=./hidden_exports
+SUMMARY_DIR=./hidden_summary
 ```
 
-Replace 
-```your_api_id_here``` 
-and 
-```your_api_hash_here``` 
-with the credentials you got earlier. 
-```SESSION_STRING```
-we'll generate that next.
+Replace ```your_api_id_here``` and ```your_api_hash_here``` with the credentials obtained from my.telegram.org. You will generate the ```SESSION_STRING``` in the next step.
 
-Generate Session String: Time to authenticate. Run:
+4. Generate Session String
+Authenticate and generate the session string:
 
-```
-npx ts-node generateSessionString.ts
-```
 
-Follow the prompts to log in. Once done, you'll get a session string. Pop that into your .env file where it says SESSION_STRING.
+```npx ts-node generateSessionString.ts```
 
-Run the Export Script: You're all set! Execute:
+Follow the on-screen prompts to log in. Once complete, add the session string to your .env file.
+
+5. Run the Export Script
+To export chats:
 
 ```
 npx ts-node src/exportChats.ts
 ```
-then for a summary of the conversations 
+
+6. Generate Summaries
+To generate a summary of the conversations:
+
 ```
 npx ts-node src/summarizeChats.ts
 ```
-Follow the on-screen instructions to select the folder and export your chats.
+
+Follow the on-screen instructions to select a folder and export chats.
+
+
+#### Notes
+Keep Credentials Secure: Never share your .env file or credentials publicly.
+Contributions Welcome: Feel free to submit issues or pull requests to improve the project.
+Happy exporting! 🚀
