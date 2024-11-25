@@ -65,7 +65,9 @@ Replace ```your_api_id_here``` and ```your_api_hash_here``` with the credentials
 Authenticate and generate the session string:
 
 
-```npx ts-node generateSessionString.ts```
+```
+npx ts-node generateSessionString.ts
+```
 
 Follow the on-screen prompts to log in. Once complete, add the session string to your .env file.
 
@@ -76,17 +78,19 @@ To export chats:
 npx ts-node src/exportChats.ts
 ```
 
-6. Generate Summaries
+Follow the on-screen instructions to select a folder, then enter ```yes ```, and the ```hidden exports``` folder will populate with TXT files for each conversation within the folder.
+
+#### Notes / WIP 
+Working on adding a LLM to summarize the conversations after they have been exported to the ```hidden exports``` folder in a ```hidden summary``` folder.
+
 To generate a summary of the conversations:
 
 ```
 npx ts-node src/summarizeChats.ts
 ```
 
-Follow the on-screen instructions to select a folder and export chats.
 
+#### Keep Credentials Secure: Never share your .env file or credentials publicly.
 
-#### Notes
-Keep Credentials Secure: Never share your .env file or credentials publicly.
 Contributions Welcome: Feel free to submit issues or pull requests to improve the project.
-Happy exporting! 🚀
+
