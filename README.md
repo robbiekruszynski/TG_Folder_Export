@@ -29,6 +29,8 @@ A TypeScript-based tool using GramJS to export Telegram chats from a specific fo
 Clone the repository to your local machine:
 ```
 https://github.com/robbiekruszynski/TG_Folder_Export.git
+```
+```
 cd tg_folder_pull
 ```
 
