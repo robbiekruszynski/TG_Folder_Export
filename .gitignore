@@ -5,6 +5,7 @@ dist/
 
 hidden_exports/
 hidden_summary/ 
+key_info/
 
 npm-debug.log*
 yarn-debug.log*
