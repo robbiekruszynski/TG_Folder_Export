@@ -1,4 +1,4 @@
-# Telegram Folder Exporter
+# Telegram Convo Exporter
 
 A TypeScript-based tool using GramJS to export Telegram chats from a specific folder.
 
