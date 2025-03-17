@@ -52,10 +52,10 @@ async function fetchFolderAndGroups() {
     onError: (err) => console.error(err),
   });
 
-  console.log("Logged in successfully!");
+  console.log("Logged in");
 
   try {
-    console.log("Fetching dialog filters...");
+    console.log("Fetching dialog filters");
     const response = await client.invoke(new Api.messages.GetDialogFilters());
 
     if (!("filters" in response) || !Array.isArray(response.filters)) {
@@ -133,52 +133,74 @@ async function fetchFolderAndGroups() {
       console.log(`${index + 1}. Name: ${group.name || "Unnamed"} (ID: ${group.id})`);
     });
 
-    const exportMessages = (await prompt("\nExport messages from all groups? (yes/no): ")).toLowerCase();
-    if (exportMessages === "yes") {
-      for (const group of folderGroups) {
-        const entity = group.entity;
-        if (!entity) {
-          console.warn(`Skipping group ${group.name} as it has no entity.`);
-          continue;
-        }
+    // Prompt for individual group or all groups export
+    const selection = await prompt("\nEnter the number of the group to export OR type 'all' to export all groups: ");
+    
+    let groupsToExport = [];
+    if (selection.toLowerCase() === 'all') {
+      groupsToExport = folderGroups;
+    } else {
+      const groupIndex = parseInt(selection);
+      if (isNaN(groupIndex) || groupIndex < 1 || groupIndex > folderGroups.length) {
+        console.error("Invalid group selection.");
+        return;
+      }
+      groupsToExport.push(folderGroups[groupIndex - 1]);
+    }
 
-        const sanitizedGroupName = (group.name || "Unnamed").replace(/\s/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
-        const exportPath = path.join(EXPORT_DIR, `export_${sanitizedGroupName}.txt`);
-
-        const fileStream = fs.createWriteStream(exportPath, { flags: "w" });
-
-        fileStream.write(`\n==== START GROUP ====\n`);
-        fileStream.write(`Group Name: ${group.name || "Unnamed"}\n`);
-        fileStream.write(`Group ID: ${group.id}\n`);
-
-        try {
-          const participants = await client.getParticipants(entity);
-          const participantMap = new Map();
-          participants.forEach((participant) => {
-            participantMap.set(participant.id.toString(), participant.username || participant.firstName || "Unknown User");
-          });
-
-          fileStream.write(`Participant Count: ${participants.length}\n`);
-          fileStream.write(`Participants: ${participants.map(p => p.username || p.firstName || "Unknown User").join(", ")}\n`);
-          fileStream.write(`==== MESSAGES ====\n`);
-
-          for await (const message of client.iterMessages(entity, { limit: 100 })) {
-            const senderName = participantMap.get(message.senderId?.toString() || "") || "Unknown Sender";
-            const formattedDate = formatDate(message.date); // Add timestamp formatting
-            fileStream.write(`[${formattedDate}] ${senderName}: ${message.text || "<Media/Other Message>"}\n`);
-          }
-
-          console.log(`Exported messages from ${group.name} to ${exportPath}`);
-        } catch (err) {
-          fileStream.write(`Error fetching participants or messages: ${(err as Error).message}\n`);
-        }
-
-        fileStream.write(`==== END GROUP ====\n`);
-        fileStream.end();
+    for (const group of groupsToExport) {
+      const entity = group.entity;
+      if (!entity) {
+        console.warn(`Skipping group ${group.name} as it has no entity.`);
+        continue;
       }
 
-      console.log("All messages exported to individual files.");
+      const sanitizedGroupName = (group.name || "Unnamed").replace(/\s/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
+      const exportPath = path.join(EXPORT_DIR, `export_${sanitizedGroupName}.txt`);
+
+      const fileStream = fs.createWriteStream(exportPath, { flags: "w" });
+
+      fileStream.write(`\n==== START GROUP ====\n`);
+      fileStream.write(`Group Name: ${group.name || "Unnamed"}\n`);
+      fileStream.write(`Group ID: ${group.id}\n`);
+
+      try {
+        const participants = await client.getParticipants(entity);
+        const participantMap = new Map();
+        participants.forEach((participant) => {
+          participantMap.set(participant.id.toString(), participant.username || participant.firstName || "Unknown User");
+        });
+
+        fileStream.write(`Participant Count: ${participants.length}\n`);
+        fileStream.write(`Participants: ${participants.map(p => p.username || p.firstName || "Unknown User").join(", ")}\n`);
+        fileStream.write(`==== MESSAGES ====\n`);
+
+        // Updated message loop to group messages by date and include time
+        let currentDateHeader = "";
+        for await (const message of client.iterMessages(entity, { limit: 100 })) {
+          const messageDate = new Date(message.date * 1000);
+          const formattedDate = `${String(messageDate.getDate()).padStart(2, "0")}/${String(messageDate.getMonth() + 1).padStart(2, "0")}/${messageDate.getFullYear()}`;
+          const formattedTime = `${String(messageDate.getHours()).padStart(2, "0")}:${String(messageDate.getMinutes()).padStart(2, "0")}`;
+
+          if (formattedDate !== currentDateHeader) {
+            currentDateHeader = formattedDate;
+            fileStream.write(`\n----- ${formattedDate} -----\n`);
+          }
+
+          const senderName = participantMap.get(message.senderId?.toString() || "") || "Unknown Sender";
+          fileStream.write(`[${formattedTime}] ${senderName}: ${message.text || "<Media/Other Message>"}\n`);
+        }
+
+        console.log(`Exported messages from ${group.name} to ${exportPath}`);
+      } catch (err) {
+        fileStream.write(`Error fetching participants or messages: ${(err as Error).message}\n`);
+      }
+
+      fileStream.write(`==== END GROUP ====\n`);
+      fileStream.end();
     }
+
+    console.log("Export complete.");
   } catch (err) {
     console.error("Error fetching folder or dialogs:", (err as Error).message);
   } finally {
