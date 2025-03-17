@@ -7,7 +7,6 @@ dotenv.config();
 const API_ID = parseInt(process.env.API_ID || "0");
 const API_HASH = process.env.API_HASH || "";
 
-// Prompt function for user input
 const prompt = (question: string): Promise<string> =>
   new Promise((resolve) => {
     const rl = readline.createInterface({

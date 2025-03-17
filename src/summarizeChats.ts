@@ -80,7 +80,7 @@ if (!HUGGINGFACE_API_KEY) {
           },
           body: JSON.stringify({ inputs: truncatedData }),
         },
-        3 // Retry up to 3 times
+        3 
       );
   
       const result = (await response.json()) as HuggingFaceResponse;
@@ -129,7 +129,7 @@ if (!HUGGINGFACE_API_KEY) {
     console.log("\nSummary Processing Completed:");
     console.log(`- Successful Summaries: ${successCount}`);
     console.log(`- Failed Summaries: ${failureCount}`);
-    console.log("All chats summarized.");
+    console.log("Yo, all chats summarized.");
   }
   
   (async () => {
