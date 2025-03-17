@@ -43,7 +43,9 @@ npm install
 ```
 npm i dotenv
 ```
-
+```
+npm install chrono-node
+```
 3. Configure Environment Variables
 Create a .env file in the project's root directory:
 
@@ -56,7 +58,7 @@ Add the following keys to your .env file:
 API_ID=your_api_id_here
 API_HASH=your_api_hash_here
 SESSION_STRING=your_session_string_here
-HUGGINGFACE_API_KEY=your_huggingface_api_key_here
+HUGGINGFACE_API_KEY=your_huggingface_api_key_here (this is not needed to function at the current time) 
 EXPORT_DIR=./hidden_exports
 SUMMARY_DIR=./hidden_summary
 ```
@@ -69,6 +71,7 @@ Authenticate and generate the session string:
 
 ```
 npx ts-node generateSessionString.ts
+
 ```
 
 Follow the on-screen prompts to log in. Once complete, add the session string to your .env file.
@@ -80,16 +83,14 @@ To export chats:
 npx ts-node src/exportChats.ts
 ```
 
-Follow the on-screen instructions to select a folder, then enter ```yes ```, and the ```hidden exports``` folder will populate with TXT files for each conversation within the folder.
+Follow the on-screen instructions to select a folder. Then, enter the number that aligns with the conversation you are looking to export, or ```all``` for all conversations within the folder. The ```hidden_exports``` folder will populate with TXT files for each conversation within the folder.
 
-#### Notes / WIP 
-Working on adding a LLM to summarize the conversations after they have been exported to the ```hidden exports``` folder in a ```hidden summary``` folder.
 
-To generate a summary of the conversations:
+To summarize the conversation, which looks for keywords run in your terminal ``` npx ts-node extractKeyInfo.ts ```
 
-```
-npx ts-node src/summarizeChats.ts
-```
+Which will populate the ```key_info``` folder, searching for keywords and giving you the summary of shared e-mails, meetings, and links. If you want to make adjustments to what was pulled, adjust the file 
+extractKeyInfo.tx
+
 
 
 #### Keep Credentials Secure: Never share your .env file or credentials publicly.
