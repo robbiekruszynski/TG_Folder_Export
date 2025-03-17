@@ -71,10 +71,9 @@ Authenticate and generate the session string:
 
 ```
 npx ts-node generateSessionString.ts
-
 ```
 
-Follow the on-screen prompts to log in. Once complete, add the session string to your .env file.
+Follow the on-screen prompts to log in. Once finished, please add the session string to your .env file.
 
 5. Run the Export Script
 To export chats:
@@ -83,10 +82,10 @@ To export chats:
 npx ts-node src/exportChats.ts
 ```
 
-Follow the on-screen instructions to select a folder. Then, enter the number that aligns with the conversation you are looking to export, or ```all``` for all conversations within the folder. The ```hidden_exports``` folder will populate with TXT files for each conversation within the folder.
+Follow the on-screen instructions to select a folder. Then, enter the number that aligns with the conversation you want to export, or ```all``` for all conversations within the folder. The ```hidden_exports``` folder will populate with TXT files for each conversation within the folder.
 
 
-To summarize the conversation, which looks for keywords run in your terminal ``` npx ts-node extractKeyInfo.ts ```
+6. To summarize the conversation, which looks for keywords run in your terminal ``` npx ts-node extractKeyInfo.ts ```
 
 Which will populate the ```key_info``` folder, searching for keywords and giving you the summary of shared e-mails, meetings, and links. If you want to make adjustments to what was pulled, adjust the file 
 extractKeyInfo.tx
