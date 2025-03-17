@@ -85,10 +85,15 @@ npx ts-node src/exportChats.ts
 Follow the on-screen instructions to select a folder. Then, enter the number that aligns with the conversation you want to export, or ```all``` for all conversations within the folder. The ```hidden_exports``` folder will populate with TXT files for each conversation within the folder.
 
 
-6. To summarize the conversation, which looks for keywords run in your terminal ``` npx ts-node extractKeyInfo.ts ```
+6. To summarize the conversation, which looks for keywords run in your terminal 
 
-Which will populate the ```key_info``` folder, searching for keywords and giving you the summary of shared e-mails, meetings, and links. If you want to make adjustments to what was pulled, adjust the file 
-extractKeyInfo.tx
+``` 
+npx ts-node extractKeyInfo.ts 
+```
+
+This will populate the ```key_info``` folder, searching for keywords and summarizing shared e-mails, meetings, and links. 
+Note: If you want to make adjustments to what was pulled, adjust the file 
+```extractKeyInfo.tx```
 
 
 
