@@ -13,7 +13,6 @@ const API_HASH = process.env.API_HASH || "";
 const SESSION_STRING = process.env.SESSION_STRING || "";
 const EXPORT_DIR = process.env.EXPORT_DIR || "./hidden_exports";
 
-// Ensure the export directory exists
 if (!fs.existsSync(EXPORT_DIR)) {
   fs.mkdirSync(EXPORT_DIR, { recursive: true });
 }
@@ -31,28 +30,28 @@ const prompt = (question: string): Promise<string> =>
   });
 
 function formatDate(timestamp: number): string {
-  const date = new Date(timestamp * 1000); // Convert Telegram timestamp to milliseconds
+  const date = new Date(timestamp * 1000); 
   const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0"); // Months are 0-based
+  const month = String(date.getMonth() + 1).padStart(2, "0");
   const year = date.getFullYear();
   return `${day}/${month}/${year}`;
 }
 
 async function fetchFolderAndGroups() {
-  console.log("Initializing Telegram client...");
+  console.log("Shoveling coal");
 
   const client = new TelegramClient(new StringSession(SESSION_STRING), API_ID, API_HASH, {
     connectionRetries: 5,
   });
 
   await client.start({
-    phoneNumber: async () => await prompt("Enter your phone number: "),
+    phoneNumber: async () => await prompt("Enter phone number () "),
     password: async () => await prompt("Enter your 2FA password (if enabled): "),
-    phoneCode: async () => await prompt("Enter the code sent to your Telegram: "),
+    phoneCode: async () => await prompt("Enter the code sent to your Telegram (check your phone or computer for the message) "),
     onError: (err) => console.error(err),
   });
 
-  console.log("Logged in");
+  console.log("Hell, it's about time. Logged in");
 
   try {
     console.log("Fetching dialog filters");
@@ -66,7 +65,7 @@ async function fetchFolderAndGroups() {
     const dialogFilters = response.filters.filter((filter) => filter instanceof Api.DialogFilter);
 
     if (dialogFilters.length === 0) {
-      console.log("No folders found.");
+      console.log("wat...no folders found.");
       return;
     }
 
@@ -175,7 +174,6 @@ async function fetchFolderAndGroups() {
         fileStream.write(`Participants: ${participants.map(p => p.username || p.firstName || "Unknown User").join(", ")}\n`);
         fileStream.write(`==== MESSAGES ====\n`);
 
-        // Updated message loop to group messages by date and include time
         let currentDateHeader = "";
         for await (const message of client.iterMessages(entity, { limit: 100 })) {
           const messageDate = new Date(message.date * 1000);
