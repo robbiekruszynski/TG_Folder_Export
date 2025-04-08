@@ -1,141 +1,285 @@
+import { TelegramClient } from "telegram";
+import { StringSession } from "telegram/sessions";
+import { Api } from "telegram/tl";
+import * as readline from "readline";
+import * as dotenv from "dotenv";
 import * as fs from "fs";
 import * as path from "path";
-import * as dotenv from "dotenv";
+
 dotenv.config();
 
-type HuggingFaceResponse = Array<{
-  summary_text: string;
-}>;
-
+const API_ID = parseInt(process.env.API_ID || "0");
+const API_HASH = process.env.API_HASH || "";
+const SESSION_STRING = process.env.SESSION_STRING || "";
 const EXPORT_DIR = process.env.EXPORT_DIR || "./hidden_exports";
-const SUMMARY_DIR = process.env.SUMMARY_DIR || "./hidden_summary";
-const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
 
-if (!HUGGINGFACE_API_KEY) {
-    throw new Error("HUGGINGFACE_API_KEY is not set in the environment variables.");
-  }
-  
-  if (!fs.existsSync(SUMMARY_DIR)) {
-    fs.mkdirSync(SUMMARY_DIR, { recursive: true });
-  }
-  
-  function cleanConversation(rawData: string): string {
-    return rawData
-      .split("\n")
-      .map(line => line.replace(/^\[\w+]:/, "").trim()) // Remove sender names
-      .filter(line => line !== "") // Remove empty lines
-      .join(" ");
-  }
-  
-  function truncateText(text: string, maxTokens: number): string {
-    const tokens = text.split(" ");
-    if (tokens.length > maxTokens) {
-      return tokens.slice(0, maxTokens).join(" ");
+if (!fs.existsSync(EXPORT_DIR)) {
+  fs.mkdirSync(EXPORT_DIR, { recursive: true });
+}
+
+const prompt = (question: string): Promise<string> =>
+  new Promise((resolve) => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+
+function formatDate(timestamp: number): string {
+  const date = new Date(timestamp * 1000);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+/**
+ * Helper function to compute the "since" date from user input.
+ * Acceptable inputs:
+ * - "beginning": returns Unix epoch (all messages)
+ * - "lastWeek": returns the date exactly 7 days ago from today
+ * - "30days": returns the date that is 30 days ago from today (any number before "days" is supported)
+ * - A specific date in "YYYY-MM-DD" format.
+ */
+function computeSinceDate(input: string): Date {
+  const now = new Date();
+  const lowerInput = input.toLowerCase();
+
+  if (lowerInput === "beginning") {
+    return new Date(0); // Unix epoch: includes all messages
+  } else if (lowerInput === "lastweek") {
+    const d = new Date();
+    d.setDate(now.getDate() - 7);
+    return d;
+  } else if (lowerInput.endsWith("days")) {
+    const days = parseInt(lowerInput.replace("days", ""));
+    if (isNaN(days)) {
+      throw new Error("Invalid number of days provided.");
     }
-    return text;
+    const d = new Date();
+    d.setDate(now.getDate() - days);
+    return d;
+  } else {
+    // Assume input is a specific date string e.g., "YYYY-MM-DD"
+    const d = new Date(input);
+    if (isNaN(d.getTime())) {
+      throw new Error("Invalid date format provided for the time filter.");
+    }
+    return d;
   }
-  
-  function generateStructuredSummary(summary: string): string {
-    return `
-  1. Main Topics Discussed:
-     ${summary}
-  
-  2. Next Steps or Action Points:
-     - [Add specific actions based on the summary if needed.]
-  
-  3. Key Questions Raised:
-     - [Highlight questions, if any.]
-  
-  4. Conclusions or Decisions Made:
-     - [Summarize the decisions made or conclusions reached.]
-    `.trim();
-  }
-  
-  async function fetchWithRetry(url: string, options: RequestInit, retries: number): Promise<Response> {
-    for (let i = 0; i < retries; i++) {
-      const response = await fetch(url, options);
-      if (response.ok) {
-        return response;
+}
+
+async function fetchFolderAndGroups() {
+  console.log("Shoveling coal");
+
+  const client = new TelegramClient(new StringSession(SESSION_STRING), API_ID, API_HASH, {
+    connectionRetries: 5,
+  });
+
+  await client.start({
+    phoneNumber: async () => await prompt("Enter phone number: "),
+    password: async () => await prompt("Enter your 2FA password (if enabled): "),
+    phoneCode: async () =>
+      await prompt("Enter the code sent to your Telegram (check your phone or computer for the message): "),
+    onError: (err) => console.error(err),
+  });
+
+  console.log("Hell, it's about time. Logged in");
+
+  try {
+    console.log("Fetching dialog filters");
+    const response = await client.invoke(new Api.messages.GetDialogFilters());
+
+    if (!("filters" in response) || !Array.isArray(response.filters)) {
+      console.error("Unexpected response from GetDialogFilters:", response);
+      return;
+    }
+
+    const dialogFilters = response.filters.filter((filter) => filter instanceof Api.DialogFilter);
+
+    if (dialogFilters.length === 0) {
+      console.log("wat...no folders found.");
+      return;
+    }
+
+    console.log("\nAvailable folders:");
+    dialogFilters.forEach((filter, index) => {
+      console.log(`${index + 1}. ${filter.title || "Unnamed folder"}`);
+    });
+
+    const folderIndex = parseInt(await prompt("\nEnter the number of the folder you want to view: "));
+    if (isNaN(folderIndex) || folderIndex < 1 || folderIndex > dialogFilters.length) {
+      console.error("Invalid folder selection.");
+      return;
+    }
+
+    const selectedFilter = dialogFilters[folderIndex - 1];
+    console.log(`\nSelected Folder: ${selectedFilter.title || "Unnamed folder"}`);
+
+    if (!selectedFilter.includePeers || selectedFilter.includePeers.length === 0) {
+      console.log("No peers defined in this folder.");
+      return;
+    }
+
+    console.log("\nFetching dialogs...");
+    const dialogs = await client.getDialogs();
+
+    const folderGroups = dialogs.filter((dialog) => {
+      const entity = dialog.entity;
+      if (!entity) return false;
+
+      return selectedFilter.includePeers.some((peer) => {
+        if (peer instanceof Api.InputPeerChat) {
+          return (
+            entity.className === "Chat" &&
+            String(entity.id) === peer.chatId.toString()
+          );
+        }
+
+        if (peer instanceof Api.InputPeerChannel) {
+          return (
+            entity.className === "Channel" &&
+            String(entity.id) === peer.channelId.toString() &&
+            entity.accessHash?.toString() === peer.accessHash?.toString()
+          );
+        }
+
+        if (peer instanceof Api.InputPeerUser) {
+          return (
+            entity.className === "User" &&
+            String(entity.id) === peer.userId.toString()
+          );
+        }
+
+        return false;
+      });
+    });
+
+    if (folderGroups.length === 0) {
+      console.log(`\nNo groups or channels found in folder "${selectedFilter.title}".`);
+      return;
+    }
+
+    console.log(`\nFound ${folderGroups.length} groups or channels in folder "${selectedFilter.title}":`);
+    folderGroups.forEach((group, index) => {
+      console.log(`${index + 1}. Name: ${group.name || "Unnamed"} (ID: ${group.id})`);
+    });
+
+    // Prompt for individual group or all groups export
+    const selection = await prompt("\nEnter the number of the group to export OR type 'all' to export all groups: ");
+    
+    let groupsToExport = [];
+    if (selection.toLowerCase() === 'all') {
+      groupsToExport = folderGroups;
+    } else {
+      const groupIndex = parseInt(selection);
+      if (isNaN(groupIndex) || groupIndex < 1 || groupIndex > folderGroups.length) {
+        console.error("Invalid group selection.");
+        return;
       }
-      console.error(`API call failed (Attempt ${i + 1}): ${response.statusText}`);
-      await new Promise(res => setTimeout(res, 1000)); // Wait 1 second before retrying
+      groupsToExport.push(folderGroups[groupIndex - 1]);
     }
-    throw new Error(`API call failed after ${retries} retries.`);
-  }
-  
-  async function summarizeFile(filePath: string, outputPath: string): Promise<boolean> {
-    const rawData = fs.readFileSync(filePath, "utf-8");
-    const cleanedData = cleanConversation(rawData);
-    const truncatedData = truncateText(cleanedData, 1024);
-  
-    console.log(`Summarizing ${filePath} using Hugging Face API...`);
+
+    // Prompt for the desired time range for export.
+    const timeRangeInput = await prompt(
+      "\nEnter the time range to export (e.g., 'beginning', 'lastWeek', '30days', or a specific date 'YYYY-MM-DD'): "
+    );
+
+    let sinceDate: Date;
     try {
-      const response = await fetchWithRetry(
-        "https://api-inference.huggingface.co/models/facebook/bart-large-cnn",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${HUGGINGFACE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ inputs: truncatedData }),
-        },
-        3 
-      );
-  
-      const result = (await response.json()) as HuggingFaceResponse;
-      const generalSummary = result[0]?.summary_text || "No summary available.";
-  
-      console.log(`Generated summary for ${filePath}:`, generalSummary);
-  
-      // Post-process the summary for structured output
-      const structuredSummary = generateStructuredSummary(generalSummary);
-      fs.writeFileSync(outputPath, structuredSummary, "utf-8");
-      console.log(`Summary successfully saved to ${outputPath}`);
-      return true;
-    } catch (error) {
-      console.error(`Error summarizing ${filePath}:`, error.message);
-      return false;
+      sinceDate = computeSinceDate(timeRangeInput);
+    } catch (e) {
+      console.error((e as Error).message);
+      return;
     }
-  }
-  
-  async function processFiles(): Promise<void> {
-    const files = fs.readdirSync(EXPORT_DIR).filter(file => file.endsWith(".txt"));
-    console.log(`Files to process: ${files.join(", ")}`);
-  
-    let successCount = 0;
-    let failureCount = 0;
-  
-    for (const file of files) {
-      const inputPath = path.join(EXPORT_DIR, file);
-      const outputPath = path.join(SUMMARY_DIR, `summary_${file}`);
-  
-      if (fs.existsSync(outputPath)) {
-        console.log(`Summary for ${file} already exists, skipping.`);
+    console.log(`Exporting messages from: ${sinceDate.toISOString()}`);
+
+    for (const group of groupsToExport) {
+      const entity = group.entity;
+      if (!entity) {
+        console.warn(`Skipping group ${group.name} as it has no entity.`);
         continue;
       }
-  
-      const success = await summarizeFile(inputPath, outputPath);
-      if (success) {
-        successCount++;
-      } else {
-        failureCount++;
+
+      const sanitizedGroupName = (group.name || "Unnamed")
+        .replace(/\s/g, "_")
+        .replace(/[^a-zA-Z0-9_]/g, "");
+      const exportPath = path.join(EXPORT_DIR, `export_${sanitizedGroupName}.txt`);
+
+      const fileStream = fs.createWriteStream(exportPath, { flags: "w" });
+
+      fileStream.write(`\n==== START GROUP ====\n`);
+      fileStream.write(`Group Name: ${group.name || "Unnamed"}\n`);
+      fileStream.write(`Group ID: ${group.id}\n`);
+      fileStream.write(`Exporting messages since: ${sinceDate.toISOString()}\n`);
+
+      try {
+        const participants = await client.getParticipants(entity);
+        const participantMap = new Map();
+        participants.forEach((participant) => {
+          participantMap.set(
+            participant.id.toString(),
+            participant.username || participant.firstName || "Unknown User"
+          );
+        });
+
+        fileStream.write(`Participant Count: ${participants.length}\n`);
+        fileStream.write(
+          `Participants: ${participants.map((p) => p.username || p.firstName || "Unknown User").join(", ")}\n`
+        );
+        fileStream.write(`==== MESSAGES ====\n`);
+
+        let currentDateHeader = "";
+        // Note: iterMessages returns messages in descending (newest first) order.
+        for await (const message of client.iterMessages(entity)) {
+          const messageDate = new Date(message.date * 1000);
+
+          // If the message is older than our sinceDate, we assume that we can stop iterating.
+          if (messageDate < sinceDate) break;
+
+          const formattedDate = `${String(messageDate.getDate()).padStart(2, "0")}/${String(
+            messageDate.getMonth() + 1
+          ).padStart(2, "0")}/${messageDate.getFullYear()}`;
+          const formattedTime = `${String(messageDate.getHours()).padStart(2, "0")}:${String(
+            messageDate.getMinutes()
+          ).padStart(2, "0")}`;
+
+          if (formattedDate !== currentDateHeader) {
+            currentDateHeader = formattedDate;
+            fileStream.write(`\n----- ${formattedDate} -----\n`);
+          }
+
+          const senderName =
+            participantMap.get(message.senderId?.toString() || "") || "Unknown Sender";
+          fileStream.write(
+            `[${formattedTime}] ${senderName}: ${message.text || "<Media/Other Message>"}\n`
+          );
+        }
+
+        console.log(`Exported messages from ${group.name} to ${exportPath}`);
+      } catch (err) {
+        fileStream.write(
+          `Error fetching participants or messages: ${(err as Error).message}\n`
+        );
       }
-  
-      // Respect rate limits by waiting 1 second between files
-      await new Promise(res => setTimeout(res, 1000));
+
+      fileStream.write(`==== END GROUP ====\n`);
+      fileStream.end();
     }
-  
-    console.log("\nSummary Processing Completed:");
-    console.log(`- Successful Summaries: ${successCount}`);
-    console.log(`- Failed Summaries: ${failureCount}`);
-    console.log("Yo, all chats summarized.");
+
+    console.log("Export complete.");
+  } catch (err) {
+    console.error("Error fetching folder or dialogs:", (err as Error).message);
+  } finally {
+    console.log("\nDisconnecting...");
+    await client.disconnect();
   }
-  
-  (async () => {
-    try {
-      await processFiles();
-    } catch (error) {
-      console.error("Unhandled error during processing:", error.message);
-    }
-  })();
+}
+
+(async () => {
+  await fetchFolderAndGroups();
+})();

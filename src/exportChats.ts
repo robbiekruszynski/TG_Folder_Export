@@ -30,11 +30,39 @@ const prompt = (question: string): Promise<string> =>
   });
 
 function formatDate(timestamp: number): string {
-  const date = new Date(timestamp * 1000); 
+  const date = new Date(timestamp * 1000);
   const day = String(date.getDate()).padStart(2, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const year = date.getFullYear();
   return `${day}/${month}/${year}`;
+}
+
+
+function computeSinceDate(input: string): Date {
+  const now = new Date();
+  const lowerInput = input.toLowerCase();
+
+  if (lowerInput === "beginning") {
+    return new Date(0); // Unix epoch: includes all messages
+  } else if (lowerInput === "lastweek") {
+    const d = new Date();
+    d.setDate(now.getDate() - 7);
+    return d;
+  } else if (lowerInput.endsWith("days")) {
+    const days = parseInt(lowerInput.replace("days", ""));
+    if (isNaN(days)) {
+      throw new Error("Invalid number of days provided.");
+    }
+    const d = new Date();
+    d.setDate(now.getDate() - days);
+    return d;
+  } else {
+    const d = new Date(input);
+    if (isNaN(d.getTime())) {
+      throw new Error("Invalid date format provided for the time filter.");
+    }
+    return d;
+  }
 }
 
 async function fetchFolderAndGroups() {
@@ -45,9 +73,10 @@ async function fetchFolderAndGroups() {
   });
 
   await client.start({
-    phoneNumber: async () => await prompt("Enter phone number () "),
+    phoneNumber: async () => await prompt("Enter phone number: "),
     password: async () => await prompt("Enter your 2FA password (if enabled): "),
-    phoneCode: async () => await prompt("Enter the code sent to your Telegram (check your phone or computer for the message) "),
+    phoneCode: async () =>
+      await prompt("Enter the code sent to your Telegram (check your phone or computer for the message): "),
     onError: (err) => console.error(err),
   });
 
@@ -132,7 +161,6 @@ async function fetchFolderAndGroups() {
       console.log(`${index + 1}. Name: ${group.name || "Unnamed"} (ID: ${group.id})`);
     });
 
-    // Prompt for individual group or all groups export
     const selection = await prompt("\nEnter the number of the group to export OR type 'all' to export all groups: ");
     
     let groupsToExport = [];
@@ -147,6 +175,23 @@ async function fetchFolderAndGroups() {
       groupsToExport.push(folderGroups[groupIndex - 1]);
     }
 
+    // --- Debugging: Time-Range Prompt Section ---
+    console.log("DEBUG: About to prompt for time range.");
+    const timeRangeInput = await prompt(
+      "\nEnter the time range to export (e.g., 'beginning', 'lastWeek', '30days', or a specific date 'YYYY-MM-DD'): "
+    );
+    console.log("DEBUG: Received time range input:", timeRangeInput);
+
+    let sinceDate: Date;
+    try {
+      sinceDate = computeSinceDate(timeRangeInput);
+      console.log("DEBUG: Computed sinceDate:", sinceDate.toISOString());
+    } catch (error) {
+      console.error("ERROR computing since date:", (error as Error).message);
+      return;
+    }
+    // --- End Debugging Section ---
+
     for (const group of groupsToExport) {
       const entity = group.entity;
       if (!entity) {
@@ -154,20 +199,25 @@ async function fetchFolderAndGroups() {
         continue;
       }
 
-      const sanitizedGroupName = (group.name || "Unnamed").replace(/\s/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
+      const sanitizedGroupName = (group.name || "Unnamed")
+        .replace(/\s/g, "_")
+        .replace(/[^a-zA-Z0-9_]/g, "");
       const exportPath = path.join(EXPORT_DIR, `export_${sanitizedGroupName}.txt`);
 
       const fileStream = fs.createWriteStream(exportPath, { flags: "w" });
-
       fileStream.write(`\n==== START GROUP ====\n`);
       fileStream.write(`Group Name: ${group.name || "Unnamed"}\n`);
       fileStream.write(`Group ID: ${group.id}\n`);
+      fileStream.write(`Exporting messages since: ${sinceDate.toISOString()}\n`);
 
       try {
         const participants = await client.getParticipants(entity);
         const participantMap = new Map();
         participants.forEach((participant) => {
-          participantMap.set(participant.id.toString(), participant.username || participant.firstName || "Unknown User");
+          participantMap.set(
+            participant.id.toString(),
+            participant.username || participant.firstName || "Unknown User"
+          );
         });
 
         fileStream.write(`Participant Count: ${participants.length}\n`);
@@ -175,17 +225,32 @@ async function fetchFolderAndGroups() {
         fileStream.write(`==== MESSAGES ====\n`);
 
         let currentDateHeader = "";
-        for await (const message of client.iterMessages(entity, { limit: 100 })) {
+        // Iterate messages; break out when message date is older than sinceDate.
+        for await (const message of client.iterMessages(entity)) {
           const messageDate = new Date(message.date * 1000);
-          const formattedDate = `${String(messageDate.getDate()).padStart(2, "0")}/${String(messageDate.getMonth() + 1).padStart(2, "0")}/${messageDate.getFullYear()}`;
-          const formattedTime = `${String(messageDate.getHours()).padStart(2, "0")}:${String(messageDate.getMinutes()).padStart(2, "0")}`;
+          if (messageDate < sinceDate) {
+            console.log(
+              "DEBUG: Breaking message loop. Message date",
+              messageDate.toISOString(),
+              "is before sinceDate",
+              sinceDate.toISOString()
+            );
+            break;
+          }
+          const formattedDate = `${String(messageDate.getDate()).padStart(2, "0")}/${String(
+            messageDate.getMonth() + 1
+          ).padStart(2, "0")}/${messageDate.getFullYear()}`;
+          const formattedTime = `${String(messageDate.getHours()).padStart(2, "0")}:${String(
+            messageDate.getMinutes()
+          ).padStart(2, "0")}`;
 
           if (formattedDate !== currentDateHeader) {
             currentDateHeader = formattedDate;
             fileStream.write(`\n----- ${formattedDate} -----\n`);
           }
 
-          const senderName = participantMap.get(message.senderId?.toString() || "") || "Unknown Sender";
+          const senderName =
+            participantMap.get(message.senderId?.toString() || "") || "Unknown Sender";
           fileStream.write(`[${formattedTime}] ${senderName}: ${message.text || "<Media/Other Message>"}\n`);
         }
 
