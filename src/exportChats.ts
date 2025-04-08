@@ -43,7 +43,7 @@ function computeSinceDate(input: string): Date {
   const lowerInput = input.toLowerCase();
 
   if (lowerInput === "beginning") {
-    return new Date(0); // Unix epoch: includes all messages
+    return new Date(0);
   } else if (lowerInput === "lastweek") {
     const d = new Date();
     d.setDate(now.getDate() - 7);
@@ -65,12 +65,215 @@ function computeSinceDate(input: string): Date {
   }
 }
 
-async function fetchFolderAndGroups() {
+
+async function exportFromFolder(client: TelegramClient): Promise<void> {
+  console.log("\nFetching dialog filters...");
+  const response = await client.invoke(new Api.messages.GetDialogFilters());
+
+  if (!("filters" in response) || !Array.isArray(response.filters)) {
+    console.error("Unexpected response from GetDialogFilters:", response);
+    return;
+  }
+
+  const dialogFilters = response.filters.filter(
+    (filter) => filter instanceof Api.DialogFilter
+  );
+
+  if (dialogFilters.length === 0) {
+    console.log("No folders found.");
+    return;
+  }
+
+  console.log("\nAvailable folders:");
+  dialogFilters.forEach((filter, index) => {
+    console.log(`${index + 1}. ${filter.title || "Unnamed folder"}`);
+  });
+
+  const folderIndex = parseInt(
+    await prompt("\nEnter the number of the folder you want to view: ")
+  );
+  if (isNaN(folderIndex) || folderIndex < 1 || folderIndex > dialogFilters.length) {
+    console.error("Invalid folder selection.");
+    return;
+  }
+
+  const selectedFilter = dialogFilters[folderIndex - 1];
+  console.log(`\nSelected Folder: ${selectedFilter.title || "Unnamed folder"}`);
+
+  if (!selectedFilter.includePeers || selectedFilter.includePeers.length === 0) {
+    console.log("No peers defined in this folder.");
+    return;
+  }
+
+  console.log("\nFetching dialogs...");
+  const dialogs = await client.getDialogs();
+
+  const folderGroups = dialogs.filter((dialog) => {
+    const entity = dialog.entity;
+    if (!entity) return false;
+
+    return selectedFilter.includePeers.some((peer) => {
+      if (peer instanceof Api.InputPeerChat) {
+        return (
+          entity.className === "Chat" &&
+          String(entity.id) === peer.chatId.toString()
+        );
+      }
+      if (peer instanceof Api.InputPeerChannel) {
+        return (
+          entity.className === "Channel" &&
+          String(entity.id) === peer.channelId.toString() &&
+          entity.accessHash?.toString() === peer.accessHash?.toString()
+        );
+      }
+      if (peer instanceof Api.InputPeerUser) {
+        return (
+          entity.className === "User" &&
+          String(entity.id) === peer.userId.toString()
+        );
+      }
+      return false;
+    });
+  });
+
+  if (folderGroups.length === 0) {
+    console.log(`\nNo groups or channels found in folder "${selectedFilter.title}".`);
+    return;
+  }
+
+  console.log(
+    `\nFound ${folderGroups.length} groups or channels in folder "${selectedFilter.title}":`
+  );
+  folderGroups.forEach((group, index) => {
+    console.log(`${index + 1}. Name: ${group.name || "Unnamed"} (ID: ${group.id})`);
+  });
+
+  const selection = await prompt(
+    "\nEnter the number of the group to export OR type 'all' to export all groups: "
+  );
+  let groupsToExport = [];
+  if (selection.toLowerCase() === "all") {
+    groupsToExport = folderGroups;
+  } else {
+    const groupIndex = parseInt(selection);
+    if (
+      isNaN(groupIndex) ||
+      groupIndex < 1 ||
+      groupIndex > folderGroups.length
+    ) {
+      console.error("Invalid group selection.");
+      return;
+    }
+    groupsToExport.push(folderGroups[groupIndex - 1]);
+  }
+
+  console.log("DEBUG: About to prompt for time range.");
+  const timeRangeInput = await prompt(
+    "\nEnter the time range to export (e.g., 'beginning', 'lastWeek', '30days', or a specific date 'YYYY-MM-DD'): "
+  );
+  console.log("DEBUG: Received time range input:", timeRangeInput);
+
+  let sinceDate: Date;
+  try {
+    sinceDate = computeSinceDate(timeRangeInput);
+    console.log("DEBUG: Computed sinceDate:", sinceDate.toISOString());
+  } catch (error) {
+    console.error("ERROR computing since date:", (error as Error).message);
+    return;
+  }
+
+  // Export messages for each selected group.
+  for (const group of groupsToExport) {
+    const entity = group.entity;
+    if (!entity) {
+      console.warn(`Skipping group ${group.name} as it has no entity.`);
+      continue;
+    }
+
+    const sanitizedGroupName = (group.name || "Unnamed")
+      .replace(/\s/g, "_")
+      .replace(/[^a-zA-Z0-9_]/g, "");
+    const exportPath = path.join(EXPORT_DIR, `export_${sanitizedGroupName}.txt`);
+
+    const fileStream = fs.createWriteStream(exportPath, { flags: "w" });
+    fileStream.write(`\n==== START GROUP ====\n`);
+    fileStream.write(`Group Name: ${group.name || "Unnamed"}\n`);
+    fileStream.write(`Group ID: ${group.id}\n`);
+    fileStream.write(`Exporting messages since: ${sinceDate.toISOString()}\n`);
+
+    try {
+      const participants = await client.getParticipants(entity);
+      const participantMap = new Map();
+      participants.forEach((participant) => {
+        participantMap.set(
+          participant.id.toString(),
+          participant.username || participant.firstName || "Unknown User"
+        );
+      });
+
+      fileStream.write(`Participant Count: ${participants.length}\n`);
+      fileStream.write(
+        `Participants: ${participants
+          .map((p) => p.username || p.firstName || "Unknown User")
+          .join(", ")}\n`
+      );
+      fileStream.write(`==== MESSAGES ====\n`);
+
+      let currentDateHeader = "";
+      for await (const message of client.iterMessages(entity)) {
+        const messageDate = new Date(message.date * 1000);
+        if (messageDate < sinceDate) {
+          console.log(
+            "DEBUG: Breaking message loop. Message date",
+            messageDate.toISOString(),
+            "is before sinceDate",
+            sinceDate.toISOString()
+          );
+          break;
+        }
+        const formattedDate = `${String(messageDate.getDate()).padStart(
+          2,
+          "0"
+        )}/${String(messageDate.getMonth() + 1).padStart(2, "0")}/${messageDate.getFullYear()}`;
+        const formattedTime = `${String(messageDate.getHours()).padStart(
+          2,
+          "0"
+        )}:${String(messageDate.getMinutes()).padStart(2, "0")}`;
+
+        if (formattedDate !== currentDateHeader) {
+          currentDateHeader = formattedDate;
+          fileStream.write(`\n----- ${formattedDate} -----\n`);
+        }
+
+        const senderName =
+          participantMap.get(message.senderId?.toString() || "") ||
+          "Unknown Sender";
+        fileStream.write(
+          `[${formattedTime}] ${senderName}: ${message.text || "<Media/Other Message>"}\n`
+        );
+      }
+
+      console.log(`Exported messages from ${group.name} to ${exportPath}`);
+    } catch (err) {
+      fileStream.write(
+        `Error fetching participants or messages: ${(err as Error).message}\n`
+      );
+    }
+
+    fileStream.write(`==== END GROUP ====\n`);
+    fileStream.end();
+  }
+}
+
+(async () => {
   console.log("Shoveling coal");
 
-  const client = new TelegramClient(new StringSession(SESSION_STRING), API_ID, API_HASH, {
-    connectionRetries: 5,
-  });
+  const client = new TelegramClient(
+    new StringSession(SESSION_STRING),
+    API_ID,
+    API_HASH,
+    { connectionRetries: 5 }
+  );
 
   await client.start({
     phoneNumber: async () => await prompt("Enter phone number: "),
@@ -82,197 +285,19 @@ async function fetchFolderAndGroups() {
 
   console.log("Hell, it's about time. Logged in");
 
-  try {
-    console.log("Fetching dialog filters");
-    const response = await client.invoke(new Api.messages.GetDialogFilters());
-
-    if (!("filters" in response) || !Array.isArray(response.filters)) {
-      console.error("Unexpected response from GetDialogFilters:", response);
-      return;
-    }
-
-    const dialogFilters = response.filters.filter((filter) => filter instanceof Api.DialogFilter);
-
-    if (dialogFilters.length === 0) {
-      console.log("wat...no folders found.");
-      return;
-    }
-
-    console.log("\nAvailable folders:");
-    dialogFilters.forEach((filter, index) => {
-      console.log(`${index + 1}. ${filter.title || "Unnamed folder"}`);
-    });
-
-    const folderIndex = parseInt(await prompt("\nEnter the number of the folder you want to view: "));
-    if (isNaN(folderIndex) || folderIndex < 1 || folderIndex > dialogFilters.length) {
-      console.error("Invalid folder selection.");
-      return;
-    }
-
-    const selectedFilter = dialogFilters[folderIndex - 1];
-    console.log(`\nSelected Folder: ${selectedFilter.title || "Unnamed folder"}`);
-
-    if (!selectedFilter.includePeers || selectedFilter.includePeers.length === 0) {
-      console.log("No peers defined in this folder.");
-      return;
-    }
-
-    console.log("\nFetching dialogs...");
-    const dialogs = await client.getDialogs();
-
-    const folderGroups = dialogs.filter((dialog) => {
-      const entity = dialog.entity;
-      if (!entity) return false;
-
-      return selectedFilter.includePeers.some((peer) => {
-        if (peer instanceof Api.InputPeerChat) {
-          return (
-            entity.className === "Chat" &&
-            String(entity.id) === peer.chatId.toString()
-          );
-        }
-
-        if (peer instanceof Api.InputPeerChannel) {
-          return (
-            entity.className === "Channel" &&
-            String(entity.id) === peer.channelId.toString() &&
-            entity.accessHash?.toString() === peer.accessHash?.toString()
-          );
-        }
-
-        if (peer instanceof Api.InputPeerUser) {
-          return (
-            entity.className === "User" &&
-            String(entity.id) === peer.userId.toString()
-          );
-        }
-
-        return false;
-      });
-    });
-
-    if (folderGroups.length === 0) {
-      console.log(`\nNo groups or channels found in folder "${selectedFilter.title}".`);
-      return;
-    }
-
-    console.log(`\nFound ${folderGroups.length} groups or channels in folder "${selectedFilter.title}":`);
-    folderGroups.forEach((group, index) => {
-      console.log(`${index + 1}. Name: ${group.name || "Unnamed"} (ID: ${group.id})`);
-    });
-
-    const selection = await prompt("\nEnter the number of the group to export OR type 'all' to export all groups: ");
-    
-    let groupsToExport = [];
-    if (selection.toLowerCase() === 'all') {
-      groupsToExport = folderGroups;
-    } else {
-      const groupIndex = parseInt(selection);
-      if (isNaN(groupIndex) || groupIndex < 1 || groupIndex > folderGroups.length) {
-        console.error("Invalid group selection.");
-        return;
-      }
-      groupsToExport.push(folderGroups[groupIndex - 1]);
-    }
-
-    // --- Debugging: Time-Range Prompt Section ---
-    console.log("DEBUG: About to prompt for time range.");
-    const timeRangeInput = await prompt(
-      "\nEnter the time range to export (e.g., 'beginning', 'lastWeek', '30days', or a specific date 'YYYY-MM-DD'): "
+  let continueExport = true;
+  while (continueExport) {
+    await exportFromFolder(client);
+    const answer = await prompt(
+      "\nDo you want to export from another folder? (type 'yes' to continue or 'close' to exit): "
     );
-    console.log("DEBUG: Received time range input:", timeRangeInput);
-
-    let sinceDate: Date;
-    try {
-      sinceDate = computeSinceDate(timeRangeInput);
-      console.log("DEBUG: Computed sinceDate:", sinceDate.toISOString());
-    } catch (error) {
-      console.error("ERROR computing since date:", (error as Error).message);
-      return;
+    if (answer.toLowerCase().trim() === "close" || answer.toLowerCase().trim() === "no" || answer.toLowerCase().trim() === "n") {
+      continueExport = false;
     }
-    // --- End Debugging Section ---
-
-    for (const group of groupsToExport) {
-      const entity = group.entity;
-      if (!entity) {
-        console.warn(`Skipping group ${group.name} as it has no entity.`);
-        continue;
-      }
-
-      const sanitizedGroupName = (group.name || "Unnamed")
-        .replace(/\s/g, "_")
-        .replace(/[^a-zA-Z0-9_]/g, "");
-      const exportPath = path.join(EXPORT_DIR, `export_${sanitizedGroupName}.txt`);
-
-      const fileStream = fs.createWriteStream(exportPath, { flags: "w" });
-      fileStream.write(`\n==== START GROUP ====\n`);
-      fileStream.write(`Group Name: ${group.name || "Unnamed"}\n`);
-      fileStream.write(`Group ID: ${group.id}\n`);
-      fileStream.write(`Exporting messages since: ${sinceDate.toISOString()}\n`);
-
-      try {
-        const participants = await client.getParticipants(entity);
-        const participantMap = new Map();
-        participants.forEach((participant) => {
-          participantMap.set(
-            participant.id.toString(),
-            participant.username || participant.firstName || "Unknown User"
-          );
-        });
-
-        fileStream.write(`Participant Count: ${participants.length}\n`);
-        fileStream.write(`Participants: ${participants.map(p => p.username || p.firstName || "Unknown User").join(", ")}\n`);
-        fileStream.write(`==== MESSAGES ====\n`);
-
-        let currentDateHeader = "";
-        // Iterate messages; break out when message date is older than sinceDate.
-        for await (const message of client.iterMessages(entity)) {
-          const messageDate = new Date(message.date * 1000);
-          if (messageDate < sinceDate) {
-            console.log(
-              "DEBUG: Breaking message loop. Message date",
-              messageDate.toISOString(),
-              "is before sinceDate",
-              sinceDate.toISOString()
-            );
-            break;
-          }
-          const formattedDate = `${String(messageDate.getDate()).padStart(2, "0")}/${String(
-            messageDate.getMonth() + 1
-          ).padStart(2, "0")}/${messageDate.getFullYear()}`;
-          const formattedTime = `${String(messageDate.getHours()).padStart(2, "0")}:${String(
-            messageDate.getMinutes()
-          ).padStart(2, "0")}`;
-
-          if (formattedDate !== currentDateHeader) {
-            currentDateHeader = formattedDate;
-            fileStream.write(`\n----- ${formattedDate} -----\n`);
-          }
-
-          const senderName =
-            participantMap.get(message.senderId?.toString() || "") || "Unknown Sender";
-          fileStream.write(`[${formattedTime}] ${senderName}: ${message.text || "<Media/Other Message>"}\n`);
-        }
-
-        console.log(`Exported messages from ${group.name} to ${exportPath}`);
-      } catch (err) {
-        fileStream.write(`Error fetching participants or messages: ${(err as Error).message}\n`);
-      }
-
-      fileStream.write(`==== END GROUP ====\n`);
-      fileStream.end();
-    }
-
-    console.log("Export complete.");
-  } catch (err) {
-    console.error("Error fetching folder or dialogs:", (err as Error).message);
-  } finally {
-    console.log("\nDisconnecting...");
-    await client.disconnect();
   }
-}
-
-(async () => {
-  await fetchFolderAndGroups();
+  
+  console.log("Disconnecting...");
+  await client.disconnect();
 })();
+
 
