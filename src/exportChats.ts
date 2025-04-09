@@ -37,34 +37,36 @@ function formatDate(timestamp: number): string {
   return `${day}/${month}/${year}`;
 }
 
-
+/**
+ * Computes a Date based on a user input.
+ * Acceptable inputs:
+ * - "all": returns Unix epoch (all messages)
+ * - "week": returns the date 7 days ago
+ * - "month": returns the date 30 days ago
+ * - Any date string (e.g., "YYYY-MM-DD") for a custom date.
+ */
 function computeSinceDate(input: string): Date {
   const now = new Date();
   const lowerInput = input.toLowerCase();
 
-  if (lowerInput === "beginning") {
+  if (lowerInput === "all") {
     return new Date(0);
-  } else if (lowerInput === "lastweek") {
+  } else if (lowerInput === "week") {
     const d = new Date();
     d.setDate(now.getDate() - 7);
     return d;
-  } else if (lowerInput.endsWith("days")) {
-    const days = parseInt(lowerInput.replace("days", ""));
-    if (isNaN(days)) {
-      throw new Error("Invalid number of days provided.");
-    }
+  } else if (lowerInput === "month") {
     const d = new Date();
-    d.setDate(now.getDate() - days);
+    d.setDate(now.getDate() - 30);
     return d;
   } else {
     const d = new Date(input);
     if (isNaN(d.getTime())) {
-      throw new Error("Invalid date format provided for the time filter.");
+      throw new Error("Invalid date format given.");
     }
     return d;
   }
 }
-
 
 async function exportFromFolder(client: TelegramClient): Promise<void> {
   console.log("\nFetching dialog filters...");
@@ -167,10 +169,21 @@ async function exportFromFolder(client: TelegramClient): Promise<void> {
     groupsToExport.push(folderGroups[groupIndex - 1]);
   }
 
+  // Prompt for time range option.
   console.log("DEBUG: About to prompt for time range.");
-  const timeRangeInput = await prompt(
-    "\nEnter the time range to export (e.g., 'beginning', 'lastWeek', '30days', or a specific date 'YYYY-MM-DD'): "
+  let timeRangeInput = "";
+  const timeOption = await prompt(
+    "\nSelect time range option:\n" +
+    "  - Type 'all' for all messages\n" +
+    "  - Type 'week' for messages from the last 7 days\n" +
+    "  - Type 'month' for messages from the last 30 days\n" +
+    "  - Type 'custom' to enter a custom date (YYYY-MM-DD)\nYour choice: "
   );
+  if (timeOption.toLowerCase().trim() === "custom") {
+    timeRangeInput = await prompt("Enter the custom date (YYYY-MM-DD): ");
+  } else {
+    timeRangeInput = timeOption;
+  }
   console.log("DEBUG: Received time range input:", timeRangeInput);
 
   let sinceDate: Date;
@@ -291,7 +304,11 @@ async function exportFromFolder(client: TelegramClient): Promise<void> {
     const answer = await prompt(
       "\nDo you want to export from another folder? (type 'yes' to continue or 'close' to exit): "
     );
-    if (answer.toLowerCase().trim() === "close" || answer.toLowerCase().trim() === "no" || answer.toLowerCase().trim() === "n") {
+    if (
+      answer.toLowerCase().trim() === "close" ||
+      answer.toLowerCase().trim() === "no" ||
+      answer.toLowerCase().trim() === "n"
+    ) {
       continueExport = false;
     }
   }
@@ -299,5 +316,4 @@ async function exportFromFolder(client: TelegramClient): Promise<void> {
   console.log("Disconnecting...");
   await client.disconnect();
 })();
-
 
