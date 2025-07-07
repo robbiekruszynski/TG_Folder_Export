@@ -3,12 +3,15 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "ts-node src/robustEnhancedBot.ts",
+    "session": "ts-node src/timeoutResistantSessionGenerator.ts",
+    "build": "tsc"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "Telegram folder search and export bot with enhanced features",
   "devDependencies": {
     "@types/node": "^22.9.1",
     "ts-node": "^10.9.2",
@@ -18,8 +21,9 @@
     "@huggingface/inference": "^2.8.1",
     "@huggingface/transformers": "^3.0.2",
     "axios": "^1.7.7",
-    "chrono-node": "^2.7.8",
+    "chrono-node": "^2.8.3",
     "dotenv": "^16.4.5",
+    "grammy": "^1.21.1",
     "node-fetch": "^3.3.2",
     "openai": "^4.73.1",
     "telegram": "^2.26.8"

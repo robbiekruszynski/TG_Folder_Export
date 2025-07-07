@@ -1,103 +1,200 @@
-# Telegram Convo Exporter
+# Telegram Folder Search Bot
 
-A TypeScript-based tool using GramJS to export Telegram chats from a specific folder.
+A powerful Telegram bot that allows you to search through your Telegram folders and conversations with enhanced features like direct message links, calendar event extraction, and action item detection.
 
----
+## 🚀 Features
 
-## Features
+- **📁 Folder Browsing** - Browse and select your Telegram folders
+- **💬 Individual Conversation Selection** - Select specific chats/groups with visual indicators
+- **🔍 Keyword Search** - Search for specific terms across multiple conversations
+- **🔗 Direct Message Links** - Click to go back to original messages
+- **📅 Calendar Event Extraction** - Automatically find meeting times and dates
+- **✅ Action Item Detection** - Identify tasks and deadlines
+- **⏰ Time Range Selection** - Search last 7 days, 30 days, 3 months, or all time
+- **🛡️ Robust Error Handling** - Handles timeouts and connection issues gracefully
 
-- **Selective Export**: Export all chats from a specific Telegram folder.
-- **Structured Output**: Messages are saved in `.txt` files, with separate files for each conversation.
+## 📋 Prerequisites
 
----
+- Node.js (v16 or higher)
+- Telegram API credentials (API_ID and API_HASH)
+- Bot token from @BotFather
 
-## Prerequisites
+## 🛠️ Installation
 
-1. **Node.js**: Install Node.js if not already available on your system. [Download Node.js](https://nodejs.org/)
-2. **Telegram API Credentials**: Obtain your API ID and API Hash from Telegram:
-   - Visit [my.telegram.org](https://my.telegram.org).
-   - Log in with your Telegram account.
-   - Navigate to **API Development Tools**.
-   - Create a new application (name it anything you like).
-   - Save the **API ID** and **API Hash** securely.
+1. **Clone the repository:**
+   ```bash
+   git clone <repository-url>
+   cd TG_Folder_Export
+   ```
 
----
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-## Setup Guide
+3. **Set up environment variables:**
+   Create a `.env` file in the root directory:
+   ```env
+   API_ID=your_api_id
+   API_HASH=your_api_hash
+   BOT_TOKEN=your_bot_token
+   SESSION_STRING=your_session_string
+   ```
 
-### 1. Clone the Repository
-Clone the repository to your local machine:
-```
-git clone https://github.com/robbiekruszynski/TG_Folder_Export.git
-```
-```
-cd tg_folder_pull
-```
+## 🔧 Setup
 
-2. Install Dependencies
-Install the required packages:
+### 1. Get Telegram API Credentials
 
-```
-npm install
-```
-```
-npm i dotenv
-```
-```
-npm install chrono-node
-```
-3. Configure Environment Variables
-Create a .env file in the project's root directory:
+1. Go to https://my.telegram.org/
+2. Log in with your phone number
+3. Go to "API Development Tools"
+4. Create a new application
+5. Copy the `API_ID` and `API_HASH`
 
-```
-touch .env
-```
-Add the following keys to your .env file:
+### 2. Create a Bot
 
-```
-API_ID=your_api_id_here
-API_HASH=your_api_hash_here
-SESSION_STRING=your_session_string_here
-HUGGINGFACE_API_KEY=your_huggingface_api_key_here (this is not needed to function at the current time) 
-EXPORT_DIR=./hidden_exports
-SUMMARY_DIR=./hidden_summary
-```
+1. Message @BotFather on Telegram
+2. Use `/newbot` command
+3. Follow the instructions to create your bot
+4. Copy the bot token
 
-Replace ```your_api_id_here``` and ```your_api_hash_here``` with the credentials obtained from my.telegram.org. You will generate the ```SESSION_STRING``` in the next step.
+### 3. Generate Session String
 
-4. Generate Session String
-Authenticate and generate the session string:
-
-
-```
-npx ts-node generateSessionString.ts
+Run the session generator:
+```bash
+npm run session
 ```
 
-Follow the on-screen prompts to log in. Once finished, please add the session string to your .env file.
+Follow the prompts to:
+- Enter your phone number (with country code, e.g., +34...)
+- Enter the verification code sent to your phone
+- Enter your 2FA password (if enabled)
 
-5. Run the Export Script
-To export chats:
+The session string will be automatically saved to your `.env` file.
 
-```
-npx ts-node src/exportChats.ts
-```
+## 🚀 Usage
 
-Follow the on-screen instructions to select a folder. Then, enter the number that aligns with the conversation you want to export, or ```all``` for all conversations within the folder. The ```hidden_exports``` folder will populate with TXT files for each conversation within the folder.
+### Start the Bot
 
-
-6. To summarize the conversation, which looks for keywords run in your terminal 
-
-``` 
-npx ts-node extractKeyInfo.ts 
+```bash
+npm start
 ```
 
-This will populate the ```key_info``` folder, searching for keywords and summarizing shared e-mails, meetings, and links. 
-Note: If you want to make adjustments to what was pulled, adjust the file 
-```extractKeyInfo.tx```
+### Bot Commands
 
+- `/start` - Welcome message and main menu
+- `/help` - Show detailed help information
 
+### User Flow
 
-#### Keep Credentials Secure: Never share your .env file or credentials publicly.
+1. **Start the bot** → Click "📁 Browse Folders"
+2. **Select a folder** → Click folder number
+3. **Select conversations** → Click to select (✅ shows selected)
+4. **Choose time range** → 7 days, 30 days, 3 months, or all time
+5. **Type search term** → Just type in chat (e.g., "meeting", "deadline")
+6. **Get results** → With direct links to original messages
 
-Contributions Welcome: Feel free to submit issues or pull requests to improve the project.
+### Search Features
+
+- **📅 Meeting** - Find meeting-related messages
+- **⏰ Deadline** - Find deadlines and due dates
+- **📞 Call** - Find call-related messages
+- **📋 Task** - Find task assignments
+- **💰 Payment** - Find payment information
+- **🎯 Project** - Find project-related messages
+- **📝 Custom** - Type your own search term
+
+## 📁 Project Structure
+
+```
+TG_Folder_Export/
+├── src/
+│   ├── robustEnhancedBot.ts          # Main bot with all features
+│   └── timeoutResistantSessionGenerator.ts  # Session string generator
+├── package.json                      # Project configuration
+├── tsconfig.json                     # TypeScript configuration
+├── README.md                         # This file
+└── .env                              # Environment variables (create this)
+```
+
+## 🔧 Available Scripts
+
+- `npm start` - Start the enhanced bot
+- `npm run session` - Generate session string
+- `npm run build` - Build TypeScript files
+
+## 🛡️ Error Handling
+
+The bot includes robust error handling for:
+- **Connection timeouts** - Automatic retry with shorter timeouts
+- **Message editing errors** - Falls back to sending new messages
+- **Session issues** - Clear error messages and recovery instructions
+- **Search failures** - Graceful degradation with helpful suggestions
+
+## 📱 Bot Features
+
+### Interactive Selection
+- **Visual indicators** - ✅ for selected, ⬜ for unselected
+- **Multiple selection** - Select multiple conversations at once
+- **Conversation types** - 👤 Users, 👥 Groups, 📢 Channels
+
+### Smart Search
+- **Keyword matching** - Case-insensitive search
+- **Time filtering** - Search within specified time ranges
+- **Result limiting** - Show top results to prevent overload
+
+### Enhanced Results
+- **Direct links** - Click to go back to original messages
+- **Calendar events** - Extract dates and times automatically
+- **Action items** - Find tasks and deadlines
+- **Conversation context** - Know which chat each result is from
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the ISC License.
+
+## 🆘 Troubleshooting
+
+### Common Issues
+
+1. **"No session string found"**
+   - Run `npm run session` to generate a session string
+
+2. **"Phone number banned"**
+   - Wait 24 hours before trying again
+   - Use a different phone number
+   - Contact Telegram support
+
+3. **"Timeout errors"**
+   - Check your internet connection
+   - Try again in a few minutes
+   - Use a VPN if needed
+
+4. **"Message can't be edited"**
+   - The bot automatically handles this by sending new messages
+   - No action needed from your side
+
+### Getting Help
+
+If you encounter issues:
+1. Check the error messages in the console
+2. Verify your `.env` file has all required variables
+3. Ensure your bot token is correct
+4. Make sure your session string is valid
+
+## 🎯 Future Enhancements
+
+- [ ] Calendar integration (add events directly to calendar)
+- [ ] Export results to various formats (PDF, CSV)
+- [ ] Advanced search filters (by sender, date range)
+- [ ] AI-powered summarization of search results
+- [ ] Web interface for easier management
 
